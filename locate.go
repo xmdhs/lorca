@@ -52,11 +52,14 @@ func LocateChrome() string {
 			"/usr/bin/chromium",
 			"/usr/bin/chromium-browser",
 			"/snap/bin/chromium",
+			"google-chrome",
+			"chromium",
+			"chromium-browser",
 		}
 	}
 
 	for _, path := range paths {
-		if _, err := os.Stat(path); os.IsNotExist(err) {
+		if _, err := exec.LookPath(path); err != nil {
 			continue
 		}
 		return path
