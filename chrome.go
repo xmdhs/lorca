@@ -12,8 +12,9 @@ import (
 	"regexp"
 	"sync"
 	"sync/atomic"
+	"time"
 
-	"golang.org/x/net/websocket"
+	"github.com/gorilla/websocket"
 )
 
 type h = map[string]interface{}
@@ -75,7 +76,7 @@ func newChromeWithArgs(chromeBinary string, args ...string) (*chrome, error) {
 	wsURL := m[1]
 
 	// Open a websocket
-	c.ws, err = websocket.Dial(wsURL, "", "http://127.0.0.1")
+	c.ws, _, err = websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		c.kill()
 		return nil, err
@@ -94,6 +95,7 @@ func newChromeWithArgs(chromeBinary string, args ...string) (*chrome, error) {
 		return nil, err
 	}
 	go c.readLoop()
+	go ping(c.ws)
 	for method, args := range map[string]h{
 		"Page.enable":          nil,
 		"Target.setAutoAttach": {"autoAttach": true, "waitForDebuggerOnStart": false},
@@ -122,8 +124,21 @@ func newChromeWithArgs(chromeBinary string, args ...string) (*chrome, error) {
 	return c, nil
 }
 
+func ping(conn *websocket.Conn) {
+	ticker := time.NewTicker(pingPeriod)
+	defer conn.Close()
+	for {
+		<-ticker.C
+		conn.SetWriteDeadline(time.Now().Add(writeWait))
+		if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			log.Println(err)
+			return
+		}
+	}
+}
+
 func (c *chrome) findTarget() (string, error) {
-	err := websocket.JSON.Send(c.ws, h{
+	err := c.ws.WriteJSON(h{
 		"id": 0, "method": "Target.setDiscoverTargets", "params": h{"discover": true},
 	})
 	if err != nil {
@@ -131,7 +146,7 @@ func (c *chrome) findTarget() (string, error) {
 	}
 	for {
 		m := msg{}
-		if err = websocket.JSON.Receive(c.ws, &m); err != nil {
+		if err = c.ws.ReadJSON(&m); err != nil {
 			return "", err
 		} else if m.Method == "Target.targetCreated" {
 			target := struct {
@@ -150,7 +165,7 @@ func (c *chrome) findTarget() (string, error) {
 }
 
 func (c *chrome) startSession(target string) (string, error) {
-	err := websocket.JSON.Send(c.ws, h{
+	err := c.ws.WriteJSON(h{
 		"id": 1, "method": "Target.attachToTarget", "params": h{"targetId": target},
 	})
 	if err != nil {
@@ -158,7 +173,7 @@ func (c *chrome) startSession(target string) (string, error) {
 	}
 	for {
 		m := msg{}
-		if err = websocket.JSON.Receive(c.ws, &m); err != nil {
+		if err = c.ws.ReadJSON(&m); err != nil {
 			return "", err
 		} else if m.ID == 1 {
 			if m.Error != nil {
@@ -250,10 +265,21 @@ type targetMessage struct {
 	} `json:"result"`
 }
 
+const (
+	writeWait      = 10 * time.Second
+	pongWait       = 60 * time.Second
+	pingPeriod     = (pongWait * 9) / 10
+	maxMessageSize = 1000000
+)
+
 func (c *chrome) readLoop() {
+	defer c.kill()
+	c.ws.SetReadLimit(maxMessageSize)
+	c.ws.SetReadDeadline(time.Now().Add(pongWait))
+	c.ws.SetPongHandler(func(string) error { c.ws.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 	for {
 		m := msg{}
-		if err := websocket.JSON.Receive(c.ws, &m); err != nil {
+		if err := c.ws.ReadJSON(&m); err != nil {
 			return
 		}
 
@@ -354,7 +380,7 @@ func (c *chrome) send(method string, params h) (json.RawMessage, error) {
 	c.pending[int(id)] = resc
 	c.Unlock()
 
-	if err := websocket.JSON.Send(c.ws, h{
+	if err := c.ws.WriteJSON(h{
 		"id":     int(id),
 		"method": "Target.sendMessageToTarget",
 		"params": h{"message": string(b), "sessionId": c.session},

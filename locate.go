@@ -36,6 +36,8 @@ func LocateChrome() string {
 		}
 	case "windows":
 		paths = []string{
+			os.Getenv("ProgramFiles") + "/Microsoft/Edge/Application/msedge.exe",
+			os.Getenv("ProgramFiles(x86)") + "/Microsoft/Edge/Application/msedge.exe",
 			os.Getenv("LocalAppData") + "/Google/Chrome/Application/chrome.exe",
 			os.Getenv("ProgramFiles") + "/Google/Chrome/Application/chrome.exe",
 			os.Getenv("ProgramFiles(x86)") + "/Google/Chrome/Application/chrome.exe",
@@ -65,8 +67,8 @@ func LocateChrome() string {
 // PromptDownload asks user if he wants to download and install Chrome, and
 // opens a download web page if the user agrees.
 func PromptDownload() {
-	title := "Chrome not found"
-	text := "No Chrome/Chromium installation was found. Would you like to download and install it now?"
+	title := "没有找到 Chrome"
+	text := "是否去安装？"
 
 	// Ask user for confirmation
 	if !messageBox(title, text) {
@@ -74,7 +76,7 @@ func PromptDownload() {
 	}
 
 	// Open download page
-	url := "https://www.google.com/chrome/"
+	url := "https://www.google.cn/chrome/"
 	switch runtime.GOOS {
 	case "linux":
 		exec.Command("xdg-open", url).Run()
