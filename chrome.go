@@ -126,7 +126,10 @@ func newChromeWithArgs(chromeBinary string, args ...string) (*chrome, error) {
 
 func ping(conn *websocket.Conn) {
 	ticker := time.NewTicker(pingPeriod)
-	defer conn.Close()
+	defer func() {
+		conn.Close()
+		ticker.Stop()
+	}()
 	for {
 		<-ticker.C
 		conn.SetWriteDeadline(time.Now().Add(writeWait))

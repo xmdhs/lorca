@@ -67,8 +67,8 @@ func LocateChrome() string {
 // PromptDownload asks user if he wants to download and install Chrome, and
 // opens a download web page if the user agrees.
 func PromptDownload() {
-	title := "没有找到 Chrome"
-	text := "是否去安装？"
+	title := "Chrome not found"
+	text := "No Chrome/Chromium installation was found. Would you like to download and install it now?"
 
 	// Ask user for confirmation
 	if !messageBox(title, text) {
@@ -76,7 +76,7 @@ func PromptDownload() {
 	}
 
 	// Open download page
-	url := "https://www.google.cn/chrome/"
+	url := "https://www.google.com/chrome/"
 	switch runtime.GOOS {
 	case "linux":
 		exec.Command("xdg-open", url).Run()
