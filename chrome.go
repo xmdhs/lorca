@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/ysmood/leakless"
 )
 
 type h = map[string]interface{}
@@ -58,8 +57,7 @@ func newChromeWithArgs(chromeBinary string, args ...string) (*chrome, error) {
 	}
 
 	// Start chrome process
-	l := leakless.New()
-	c.cmd = l.Command(chromeBinary, args...)
+	c.cmd = exec.Command(chromeBinary, args...)
 	pipe, err := c.cmd.StderrPipe()
 	if err != nil {
 		return nil, err
