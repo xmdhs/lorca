@@ -46,6 +46,7 @@ type chrome struct {
 	window   int
 	pending  map[int]chan result
 	bindings map[string]bindingFunc
+	wssend   chan []byte
 }
 
 func newChromeWithArgs(chromeBinary string, args ...string) (*chrome, error) {
@@ -94,8 +95,9 @@ func newChromeWithArgs(chromeBinary string, args ...string) (*chrome, error) {
 		c.kill()
 		return nil, err
 	}
+	c.wssend = make(chan []byte, 50)
 	go c.readLoop()
-	go ping(c.ws)
+	go c.websocketWrite()
 	for method, args := range map[string]h{
 		"Page.enable":          nil,
 		"Target.setAutoAttach": {"autoAttach": true, "waitForDebuggerOnStart": false},
@@ -124,18 +126,26 @@ func newChromeWithArgs(chromeBinary string, args ...string) (*chrome, error) {
 	return c, nil
 }
 
-func ping(conn *websocket.Conn) {
+func (c *chrome) websocketWrite() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
-		conn.Close()
+		c.kill()
 		ticker.Stop()
 	}()
 	for {
-		<-ticker.C
-		conn.SetWriteDeadline(time.Now().Add(writeWait))
-		if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-			log.Println(err)
-			return
+		select {
+		case message := <-c.wssend:
+			c.ws.SetWriteDeadline(time.Now().Add(writeWait))
+			err := c.ws.WriteMessage(websocket.TextMessage, message)
+			if err != nil {
+				return
+			}
+		case <-ticker.C:
+			c.ws.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.ws.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+
 		}
 	}
 }
@@ -383,13 +393,16 @@ func (c *chrome) send(method string, params h) (json.RawMessage, error) {
 	c.pending[int(id)] = resc
 	c.Unlock()
 
-	if err := c.ws.WriteJSON(h{
+	bb, err := json.Marshal(h{
 		"id":     int(id),
 		"method": "Target.sendMessageToTarget",
 		"params": h{"message": string(b), "sessionId": c.session},
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
+	c.wssend <- bb
+
 	res := <-resc
 	return res.Value, res.Err
 }
