@@ -47,14 +47,14 @@ func LocateChrome() string {
 		}
 	default:
 		paths = []string{
-			"/usr/bin/google-chrome-stable",
+			"google-chrome",
+			"chromium",
+			"chromium-browser",
 			"/usr/bin/google-chrome",
 			"/usr/bin/chromium",
 			"/usr/bin/chromium-browser",
 			"/snap/bin/chromium",
-			"google-chrome",
-			"chromium",
-			"chromium-browser",
+			"/usr/bin/google-chrome-stable",
 		}
 	}
 
