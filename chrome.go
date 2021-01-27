@@ -12,7 +12,6 @@ import (
 	"regexp"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -127,25 +126,16 @@ func newChromeWithArgs(chromeBinary string, args ...string) (*chrome, error) {
 }
 
 func (c *chrome) websocketWrite() {
-	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		c.kill()
-		ticker.Stop()
 	}()
 	for {
 		select {
 		case message := <-c.wssend:
-			c.ws.SetWriteDeadline(time.Now().Add(writeWait))
 			err := c.ws.WriteMessage(websocket.TextMessage, message)
 			if err != nil {
 				return
 			}
-		case <-ticker.C:
-			c.ws.SetWriteDeadline(time.Now().Add(writeWait))
-			if err := c.ws.WriteMessage(websocket.PingMessage, nil); err != nil {
-				return
-			}
-
 		}
 	}
 }
@@ -279,17 +269,12 @@ type targetMessage struct {
 }
 
 const (
-	writeWait      = 10 * time.Second
-	pongWait       = 60 * time.Second
-	pingPeriod     = (pongWait * 9) / 10
 	maxMessageSize = 1000000
 )
 
 func (c *chrome) readLoop() {
 	defer c.kill()
 	c.ws.SetReadLimit(maxMessageSize)
-	c.ws.SetReadDeadline(time.Now().Add(pongWait))
-	c.ws.SetPongHandler(func(string) error { c.ws.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 	for {
 		m := msg{}
 		if err := c.ws.ReadJSON(&m); err != nil {
