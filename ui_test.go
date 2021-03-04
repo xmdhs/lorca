@@ -150,3 +150,11 @@ func TestFunctionReturnTypes(t *testing.T) {
 		t.Fatal(v)
 	}
 }
+
+func Test_ui_Cookie(t *testing.T) {
+	ui, err := New("https://www.mcbbs.net", "", 480, 320, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ui.Cookie()
+}
